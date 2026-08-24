@@ -15,9 +15,20 @@ dependencies = [
 dev = [
     "pytest",
     "ruff",
+    "ipykernel",
+]
+# Default group: real end-to-end tests against Databricks Connect.
+databricks = [
+    { include-group = "dev" },
     "databricks-dlt",
     "databricks-connect>=15.4,<15.5",
-    "ipykernel",
+]
+# `uv run --only-group local pytest` — fast local Spark, no Databricks connection.
+# databricks-connect vendors its own `pyspark` and refuses local masters, so this
+# group installs plain pyspark instead and must never be combined with `databricks`.
+local = [
+    { include-group = "dev" },
+    "pyspark==3.5.0",
 ]
 
 [project.scripts]
@@ -32,6 +43,9 @@ packages = ["src/gbfs_etl"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.uv]
+default-groups = ["databricks"]
 
 [tool.pytest.ini_options]
 filterwarnings = [

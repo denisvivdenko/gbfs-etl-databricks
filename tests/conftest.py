@@ -1,16 +1,38 @@
-"""This file configures pytest, initializes Databricks Connect, and provides fixtures for Spark and loading test data."""
+"""This file configures pytest, initializes Spark, and provides fixtures for Spark and loading test data.
+
+Two modes, matching the `databricks` / `local` uv dependency groups (see pyproject.toml):
+
+- databricks (default): real Databricks Connect session, for end-to-end tests.
+  Run with `uv run pytest`.
+- local: plain local PySpark, for fast experiments with no Databricks connection.
+  Run with `uv run --only-group local pytest`.
+
+The two groups install mutually exclusive `pyspark` packages, so the mode is
+auto-detected from which one is importable. Set SPARK_LOCAL=1 / SPARK_LOCAL=0 to
+override the auto-detection explicitly.
+"""
 
 import os, sys, pathlib
 from contextlib import contextmanager
 
-from databricks.connect import DatabricksSession
-from databricks.sdk import WorkspaceClient
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType
 import pytest
 import json
 import csv
 import os
+
+
+def _use_local_spark() -> bool:
+    """Decide whether to build a local SparkSession instead of Databricks Connect."""
+    override = os.environ.get("SPARK_LOCAL")
+    if override is not None:
+        return override.lower() not in ("", "0", "false")
+    try:
+        import databricks.connect  # noqa: F401
+        return False
+    except ImportError:
+        return True
 
 
 @pytest.fixture()
@@ -22,6 +44,11 @@ def spark() -> SparkSession:
             df = spark.createDataFrame([(1,)], ["x"])
             assert df.count() == 1
     """
+    if _use_local_spark():
+        return SparkSession.builder.master("local[*]").appName("gbfs_etl-local-tests").getOrCreate()
+
+    from databricks.connect import DatabricksSession
+
     return DatabricksSession.builder.getOrCreate()
 
 
@@ -80,6 +107,8 @@ def load_schema():
 
 def _enable_fallback_compute():
     """Enable serverless compute if no compute is specified."""
+    from databricks.sdk import WorkspaceClient
+
     conf = WorkspaceClient().config
     if conf.serverless_compute_id or conf.cluster_id or os.environ.get("SPARK_REMOTE"):
         return
@@ -104,8 +133,14 @@ def _allow_stderr_output(config: pytest.Config):
 
 def pytest_configure(config: pytest.Config):
     """Configure pytest session."""
+    if _use_local_spark():
+        print("🖥️  running with a local SparkSession (SPARK_LOCAL)", file=sys.stderr)
+        return
+
     with _allow_stderr_output(config):
         _enable_fallback_compute()
+
+        from databricks.connect import DatabricksSession
 
         # Initialize Spark session eagerly, so it is available even when
         # SparkSession.builder.getOrCreate() is used. For DB Connect 15+,

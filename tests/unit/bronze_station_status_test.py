@@ -4,8 +4,6 @@ here holds up, port the logic into
 src/pipelines/gbfs_etl/transformations/bronze_station_status.py.
 """
 
-from pyspark.sql.functions import col, explode
-
 
 def test_loads_sample_with_autoloader_schema(load_fixture, load_schema):
     schema = load_schema("bronze_station_status_schema.json")
