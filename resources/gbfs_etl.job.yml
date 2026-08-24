@@ -1,0 +1,13 @@
+resources:
+  jobs:
+    gbfs_etl_job:
+      name: "gbfs_etl_job"
+      trigger:
+        pause_status: UNPAUSED
+        periodic:
+          interval: 12
+          unit: HOURS
+      tasks:
+        - task_key: refresh_gbfs_etl_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.gbfs_etl.id}
