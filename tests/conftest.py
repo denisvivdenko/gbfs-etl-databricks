@@ -3,19 +3,14 @@
 import os, sys, pathlib
 from contextlib import contextmanager
 
-
-try:
-    from databricks.connect import DatabricksSession
-    from databricks.sdk import WorkspaceClient
-    from pyspark.sql import SparkSession
-    import pytest
-    import json
-    import csv
-    import os
-except ImportError:
-    raise ImportError(
-        "Test dependencies not found.\n\nRun tests using 'uv run pytest'. See http://docs.astral.sh/uv to learn more about uv."
-    )
+from databricks.connect import DatabricksSession
+from databricks.sdk import WorkspaceClient
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType
+import pytest
+import json
+import csv
+import os
 
 
 @pytest.fixture()
@@ -34,24 +29,51 @@ def spark() -> SparkSession:
 def load_fixture(spark: SparkSession):
     """Provide a callable to load JSON or CSV from fixtures/ directory.
 
+    Pass `schema` (e.g. from `load_schema`) to load with an explicit, production-accurate
+    schema instead of one inferred from the fixture rows themselves.
+
     Example usage:
 
         def test_using_fixture(load_fixture):
             data = load_fixture("my_data.json")
             assert data.count() >= 1
+
+        def test_using_fixture_with_schema(load_fixture, load_schema):
+            schema = load_schema("bronze_station_status_schema.json")
+            data = load_fixture("bronze_station_status_sample.json", schema=schema)
     """
 
-    def _loader(filename: str):
+    def _loader(filename: str, schema: StructType | None = None):
         path = pathlib.Path(__file__).parent.parent / "fixtures" / filename
         suffix = path.suffix.lower()
         if suffix == ".json":
             rows = json.loads(path.read_text())
-            return spark.createDataFrame(rows)
+            return spark.createDataFrame(rows, schema=schema)
         if suffix == ".csv":
             with path.open(newline="") as f:
                 rows = list(csv.DictReader(f))
-            return spark.createDataFrame(rows)
+            return spark.createDataFrame(rows, schema=schema)
         raise ValueError(f"Unsupported fixture type for: {filename}")
+
+    return _loader
+
+
+@pytest.fixture()
+def load_schema():
+    """Provide a callable to load a Spark StructType schema saved as JSON from fixtures/.
+
+    Regenerate schema fixtures with scripts/fetch_autoloader_schema.py.
+
+    Example usage:
+
+        def test_using_schema(load_schema):
+            schema = load_schema("bronze_station_status_schema.json")
+            assert schema["data"].dataType.typeName() == "struct"
+    """
+
+    def _loader(filename: str) -> StructType:
+        path = pathlib.Path(__file__).parent.parent / "fixtures" / filename
+        return StructType.fromJson(json.loads(path.read_text()))
 
     return _loader
 

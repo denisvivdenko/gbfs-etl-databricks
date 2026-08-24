@@ -32,3 +32,10 @@ packages = ["src/gbfs_etl"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # pyspark's Arrow conversion path (pyspark/sql/pandas/types.py) uses
+    # distutils.version.LooseVersion internally; unrelated to project code.
+    "ignore:distutils Version classes are deprecated.*:DeprecationWarning",
+]

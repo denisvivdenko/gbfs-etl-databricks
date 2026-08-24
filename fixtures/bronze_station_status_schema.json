@@ -1,0 +1,115 @@
+{
+  "type": "struct",
+  "fields": [
+    {
+      "name": "data",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "stations",
+            "type": {
+              "type": "array",
+              "elementType": {
+                "type": "struct",
+                "fields": [
+                  {
+                    "name": "is_installed",
+                    "type": "boolean",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "is_renting",
+                    "type": "boolean",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "is_returning",
+                    "type": "boolean",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "last_reported",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "num_vehicles_available",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "station_id",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "vehicle_types_available",
+                    "type": {
+                      "type": "array",
+                      "elementType": {
+                        "type": "struct",
+                        "fields": [
+                          {
+                            "name": "count",
+                            "type": "long",
+                            "nullable": true,
+                            "metadata": {}
+                          },
+                          {
+                            "name": "vehicle_type_id",
+                            "type": "string",
+                            "nullable": true,
+                            "metadata": {}
+                          }
+                        ]
+                      },
+                      "containsNull": true
+                    },
+                    "nullable": true,
+                    "metadata": {}
+                  }
+                ]
+              },
+              "containsNull": true
+            },
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "last_updated",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "ttl",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "_rescued_data",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    }
+  ]
+}
