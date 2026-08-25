@@ -10,3 +10,6 @@ resources:
       libraries:
         - glob:
             include: ../src/pipelines/gbfs_etl/transformations/**
+      environment:
+        dependencies:
+          - --editable ${workspace.file_path}
