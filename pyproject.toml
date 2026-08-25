@@ -48,8 +48,12 @@ line-length = 120
 default-groups = ["databricks"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src/pipelines"]
 filterwarnings = [
     # pyspark's Arrow conversion path (pyspark/sql/pandas/types.py) uses
     # distutils.version.LooseVersion internally; unrelated to project code.
     "ignore:distutils Version classes are deprecated.*:DeprecationWarning",
+    # pyspark's timestamp decoding path (pyspark/sql/types.py) uses
+    # datetime.utcfromtimestamp internally; unrelated to project code.
+    "ignore:datetime.datetime.utcfromtimestamp\\(\\) is deprecated.*:DeprecationWarning",
 ]
