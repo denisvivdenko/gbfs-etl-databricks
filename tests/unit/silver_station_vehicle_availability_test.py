@@ -9,7 +9,7 @@ src/pipelines/gbfs_etl/transformations/silver_station_vehicle_availability.py.
 
 from datetime import datetime
 
-from gbfs_etl.transformations.silver_station_vehicle_availability import (
+from gbfs_etl.transformations.silver.station_vehicle_availability import (
     transform_vehicle_availability,
 )
 

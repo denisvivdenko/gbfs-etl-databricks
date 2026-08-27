@@ -18,3 +18,11 @@ test-local:
 
 test-databricks:
 	uv run --exact pytest $(ARGS)
+
+deploy-dev:
+	databricks bundle validate -t dev && \
+	databricks bundle deploy -t dev
+
+deploy-prod:
+	databricks bundle validate -t prod && \
+	databricks bundle deploy -t prod 
