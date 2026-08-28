@@ -26,6 +26,8 @@ test-local:
 smoke-test-dev: deploy-dev
 	uv run --exact pytest tests/integration -m integration $(ARGS) 
 
+test-all: test test-local smoke-test-dev
+
 deploy-dev:
 	databricks bundle validate -t dev && \
 	databricks bundle deploy -t dev

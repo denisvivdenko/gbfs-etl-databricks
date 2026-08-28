@@ -9,7 +9,7 @@ src/pipelines/gbfs_etl/transformations/silver_station_operational_status.py.
 
 from datetime import datetime
 
-from gbfs_etl.transformations.silver.station_operational_status import (
+from gbfs_etl.transformations.station_status.silver.station_operational_status import (
     transform_operational_status,
 )
 

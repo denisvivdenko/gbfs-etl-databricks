@@ -13,7 +13,7 @@ src/pipelines/gbfs_etl/transformations/silver_station_vehicle_type_availability.
 
 from datetime import datetime
 
-from gbfs_etl.transformations.silver.station_vehicle_type_availability import (
+from gbfs_etl.transformations.station_status.silver.station_vehicle_type_availability import (
     transform_vehicle_type_availability,
 )
 

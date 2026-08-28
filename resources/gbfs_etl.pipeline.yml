@@ -6,9 +6,10 @@ resources:
       schema: ${var.schema}
       serverless: true
       continuous: false
+      root_path: "../src"
       libraries:
         - glob:
-            include: ../pipelines/bronze/**
+            include: ../src/gbfs_etl/pipelines/station_status/**
       environment:
         dependencies:
           - --editable ${workspace.file_path}
