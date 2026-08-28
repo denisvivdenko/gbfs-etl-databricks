@@ -1,0 +1,426 @@
+{
+  "datasets": [
+    {
+      "name": "ds_station_daily",
+      "displayName": "Station daily stockout summary",
+      "queryLines": [
+        "WITH intervals AS (\n",
+        "  SELECT\n",
+        "    station_id,\n",
+        "    effective_from,\n",
+        "    COALESCE(LEAD(effective_from) OVER (PARTITION BY station_id ORDER BY effective_from), current_timestamp()) AS effective_until,\n",
+        "    num_vehicles_available\n",
+        "  FROM silver_station_vehicle_availability\n",
+        "),\n",
+        "station_window AS (\n",
+        "  SELECT station_id, GREATEST(datediff(MAX(effective_until), MIN(effective_from)), 1) AS n_days\n",
+        "  FROM intervals\n",
+        "  GROUP BY station_id\n",
+        "),\n",
+        "empty AS (\n",
+        "  SELECT station_id, effective_from, effective_until,\n",
+        "    (unix_timestamp(effective_until) - unix_timestamp(effective_from)) / 60.0 AS empty_minutes\n",
+        "  FROM intervals\n",
+        "  WHERE num_vehicles_available = 0\n",
+        ")\n",
+        "SELECT\n",
+        "  e.station_id AS station_id,\n",
+        "  w.n_days AS n_days,\n",
+        "  SUM(e.empty_minutes) AS total_empty_minutes,\n",
+        "  ROUND(SUM(e.empty_minutes) / w.n_days, 1) AS avg_empty_minutes_per_day,\n",
+        "  ROUND(SUM(e.empty_minutes) / 60.0, 1) AS total_empty_hours,\n",
+        "  COUNT(*) AS n_stockout_events\n",
+        "FROM empty e\n",
+        "JOIN station_window w ON e.station_id = w.station_id\n",
+        "GROUP BY e.station_id, w.n_days\n",
+        "ORDER BY avg_empty_minutes_per_day DESC"
+      ],
+      "columns": [
+        {
+          "displayName": "Fleet Avg Empty Min/Day",
+          "description": "Fleet-wide average minutes a station spends empty per day, weighted by each station's observed days",
+          "expression": "SUM(`total_empty_minutes`) / NULLIF(SUM(`n_days`), 0)"
+        },
+        {
+          "displayName": "Total Stockout Events",
+          "description": "Total count of distinct empty periods across all stations",
+          "expression": "SUM(`n_stockout_events`)"
+        }
+      ]
+    },
+    {
+      "name": "ds_hourly",
+      "displayName": "Stockout minutes by hour of day",
+      "queryLines": [
+        "WITH intervals AS (\n",
+        "  SELECT\n",
+        "    station_id,\n",
+        "    effective_from,\n",
+        "    COALESCE(LEAD(effective_from) OVER (PARTITION BY station_id ORDER BY effective_from), current_timestamp()) AS effective_until,\n",
+        "    num_vehicles_available\n",
+        "  FROM silver_station_vehicle_availability\n",
+        "),\n",
+        "station_window AS (\n",
+        "  SELECT station_id, GREATEST(datediff(MAX(effective_until), MIN(effective_from)), 1) AS n_days\n",
+        "  FROM intervals\n",
+        "  GROUP BY station_id\n",
+        "),\n",
+        "empty AS (\n",
+        "  SELECT station_id, effective_from AS empty_from, effective_until AS empty_until\n",
+        "  FROM intervals\n",
+        "  WHERE num_vehicles_available = 0\n",
+        "),\n",
+        "hour_buckets AS (\n",
+        "  SELECT\n",
+        "    station_id,\n",
+        "    empty_from,\n",
+        "    empty_until,\n",
+        "    explode(sequence(date_trunc('HOUR', empty_from), date_trunc('HOUR', empty_until), interval 1 hour)) AS bucket_start\n",
+        "  FROM empty\n",
+        "),\n",
+        "clipped AS (\n",
+        "  SELECT\n",
+        "    station_id,\n",
+        "    hour(bucket_start) AS hour_of_day,\n",
+        "    (unix_timestamp(LEAST(empty_until, bucket_start + INTERVAL 1 HOUR)) - unix_timestamp(GREATEST(empty_from, bucket_start))) / 60.0 AS clipped_minutes\n",
+        "  FROM hour_buckets\n",
+        ")\n",
+        "SELECT\n",
+        "  c.station_id AS station_id,\n",
+        "  c.hour_of_day AS hour_of_day,\n",
+        "  SUM(c.clipped_minutes) AS total_empty_minutes,\n",
+        "  MAX(w.n_days) AS station_days\n",
+        "FROM clipped c\n",
+        "JOIN station_window w ON c.station_id = w.station_id\n",
+        "GROUP BY c.station_id, c.hour_of_day"
+      ],
+      "columns": [
+        {
+          "displayName": "Avg Empty Minutes",
+          "description": "Average minutes empty in this hour of day per station per day, across whichever stations remain after filtering",
+          "expression": "SUM(`total_empty_minutes`) / NULLIF(SUM(`station_days`), 0)"
+        }
+      ]
+    },
+    {
+      "name": "ds_current_status",
+      "displayName": "Current station status",
+      "queryLines": [
+        "WITH latest AS (\n",
+        "  SELECT station_id, num_vehicles_available,\n",
+        "    ROW_NUMBER() OVER (PARTITION BY station_id ORDER BY effective_from DESC) AS rn\n",
+        "  FROM silver_station_vehicle_availability\n",
+        ")\n",
+        "SELECT\n",
+        "  station_id,\n",
+        "  CASE WHEN num_vehicles_available = 0 THEN 1 ELSE 0 END AS is_currently_empty\n",
+        "FROM latest\n",
+        "WHERE rn = 1"
+      ],
+      "columns": [
+        {
+          "displayName": "Stations Currently Empty",
+          "description": "Count of stations with 0 vehicles available as of the latest poll",
+          "expression": "SUM(`is_currently_empty`)"
+        },
+        {
+          "displayName": "Pct Currently Empty",
+          "description": "Share of the fleet currently at 0 vehicles available",
+          "expression": "SUM(`is_currently_empty`) * 1.0 / COUNT(`station_id`)"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Station Stockout Overview\n",
+                "\n",
+                "How much time GBFS stations spend with **0 vehicles available**, per station and by hour of day. Empty periods are reconstructed from the silver change-log (`silver_station_vehicle_availability`) by treating each row's timestamp as the start of a state that lasts until the station's next reported change."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi-currently-empty",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_current_status",
+                  "fields": [
+                    {"name": "measure(Stations Currently Empty)", "expression": "MEASURE(`Stations Currently Empty`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {"fieldName": "measure(Stations Currently Empty)", "displayName": "Stations Empty Now"}
+              },
+              "frame": {"title": "Stations Empty Right Now", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-empty",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_current_status",
+                  "fields": [
+                    {"name": "measure(Pct Currently Empty)", "expression": "MEASURE(`Pct Currently Empty`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Pct Currently Empty)",
+                  "displayName": "% Fleet Empty",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+                }
+              },
+              "frame": {"title": "% of Fleet Empty Now", "showTitle": true}
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-fleet-avg",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_station_daily",
+                  "fields": [
+                    {"name": "measure(Fleet Avg Empty Min/Day)", "expression": "MEASURE(`Fleet Avg Empty Min/Day`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Fleet Avg Empty Min/Day)",
+                  "displayName": "Avg Min Empty / Day",
+                  "formatTemplate": "{{ @formatted }} min",
+                  "format": {"type": "number", "decimalPlaces": {"type": "max", "places": 1}}
+                }
+              },
+              "frame": {"title": "Fleet Avg Empty Minutes / Station / Day", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-total-events",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_station_daily",
+                  "fields": [
+                    {"name": "measure(Total Stockout Events)", "expression": "MEASURE(`Total Stockout Events`)"}
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {"fieldName": "measure(Total Stockout Events)", "displayName": "Stockout Events"}
+              },
+              "frame": {"title": "Total Stockout Events", "showTitle": true}
+            }
+          },
+          "position": {"x": 9, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "section-diurnal",
+            "multilineTextboxSpec": {
+              "lines": ["## Diurnal Pattern"]
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "hourly-line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_hourly",
+                  "fields": [
+                    {"name": "hour_of_day", "expression": "`hour_of_day`"},
+                    {"name": "measure(Avg Empty Minutes)", "expression": "MEASURE(`Avg Empty Minutes`)"}
+                  ],
+                  "disaggregated": false,
+                  "orders": [{"direction": "ASC", "expression": "`hour_of_day`"}]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "hour_of_day",
+                  "displayName": "Hour of Day",
+                  "scale": {"type": "quantitative", "domainMin": 0, "domainMax": 23}
+                },
+                "y": {
+                  "fieldName": "measure(Avg Empty Minutes)",
+                  "displayName": "Avg Minutes Empty",
+                  "scale": {"type": "quantitative", "domainMin": 0}
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average Minutes Out of Stock, by Hour of Day",
+                "showDescription": true,
+                "description": "Fleet-wide by default; use the station filter to isolate one station."
+              }
+            }
+          },
+          "position": {"x": 0, "y": 6, "width": 8, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "filter-station",
+            "queries": [
+              {
+                "name": "ds_hourly_station",
+                "query": {
+                  "datasetName": "ds_hourly",
+                  "fields": [{"name": "station_id", "expression": "`station_id`"}],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [{"fieldName": "station_id", "displayName": "Station", "queryName": "ds_hourly_station"}]
+              },
+              "frame": {"showTitle": true, "title": "Station (optional)"}
+            }
+          },
+          "position": {"x": 8, "y": 6, "width": 4, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "diurnal-tip",
+            "multilineTextboxSpec": {
+              "lines": [
+                "**Tip:** pick a station above to see whether its empty periods cluster at commute hours or stay flat all day — that distinction usually points to demand-driven vs. broken/removed-bike stockouts."
+              ]
+            }
+          },
+          "position": {"x": 8, "y": 8, "width": 4, "height": 4}
+        },
+        {
+          "widget": {
+            "name": "section-detail",
+            "multilineTextboxSpec": {
+              "lines": ["## Per-Station Detail"]
+            }
+          },
+          "position": {"x": 0, "y": 12, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "station-table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_station_daily",
+                  "fields": [
+                    {"name": "station_id", "expression": "`station_id`"},
+                    {"name": "avg_empty_minutes_per_day", "expression": "`avg_empty_minutes_per_day`"},
+                    {"name": "total_empty_hours", "expression": "`total_empty_hours`"},
+                    {"name": "n_stockout_events", "expression": "`n_stockout_events`"},
+                    {"name": "n_days", "expression": "`n_days`"}
+                  ],
+                  "disaggregated": true,
+                  "orders": [{"direction": "DESC", "expression": "`avg_empty_minutes_per_day`"}]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "station_id", "displayName": "Station"},
+                  {
+                    "fieldName": "avg_empty_minutes_per_day",
+                    "displayName": "Avg Min Empty / Day",
+                    "format": {"type": "number", "decimalPlaces": {"type": "exact", "places": 1}},
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {"operand": {"type": "data-value", "value": "120"}, "operator": ">"},
+                          "backgroundColor": {"hex": "#D55E00"}
+                        }
+                      ]
+                    }
+                  },
+                  {"fieldName": "total_empty_hours", "displayName": "Total Hours Empty", "format": {"type": "number", "decimalPlaces": {"type": "exact", "places": 1}}},
+                  {"fieldName": "n_stockout_events", "displayName": "Stockout Events"},
+                  {"fieldName": "n_days", "displayName": "Days Observed"}
+                ]
+              },
+              "frame": {"showTitle": true, "title": "Stations Ranked by Average Daily Empty Time"}
+            }
+          },
+          "position": {"x": 0, "y": 13, "width": 12, "height": 8}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#FCFCFC", "dark": "#1F272D"},
+      "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "widgetBorderColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "fontColor": {"light": "#11171C", "dark": "#E8ECF0"},
+      "selectionColor": {"light": "#0072B2", "dark": "#8ACAFF"},
+      "visualizationColors": ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#D55E00", "#56B4E9"],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}

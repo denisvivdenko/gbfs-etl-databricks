@@ -1,0 +1,8 @@
+resources:
+  dashboards:
+    station_stockout_overview:
+      display_name: "Station Stockout Overview"
+      file_path: ../src/dashboards/station_stockout_overview.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema}
