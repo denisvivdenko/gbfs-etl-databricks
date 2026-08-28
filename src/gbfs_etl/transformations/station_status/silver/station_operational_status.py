@@ -1,6 +1,8 @@
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
+from gbfs_etl.transformations.quality import assert_unique
+
 _TS_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
 
@@ -30,7 +32,7 @@ def transform_operational_status(bronze_df: DataFrame) -> DataFrame:
     prev_is_renting = F.lag("is_renting").over(window)
     prev_is_returning = F.lag("is_returning").over(window)
 
-    return (
+    result = (
         stations.withColumn(
             "_is_change",
             prev_is_installed.isNull()
@@ -41,3 +43,4 @@ def transform_operational_status(bronze_df: DataFrame) -> DataFrame:
         .filter(F.col("_is_change"))
         .select("station_id", "effective_from", "is_installed", "is_renting", "is_returning")
     )
+    return assert_unique(result, ["station_id", "effective_from"])

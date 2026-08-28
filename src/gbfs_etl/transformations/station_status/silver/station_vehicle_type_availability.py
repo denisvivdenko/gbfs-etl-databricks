@@ -1,6 +1,8 @@
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
+from gbfs_etl.transformations.quality import assert_unique
+
 _TS_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
 
@@ -48,8 +50,9 @@ def transform_vehicle_type_availability(bronze_df: DataFrame) -> DataFrame:
     window = Window.partitionBy("station_id", "vehicle_type_id").orderBy("effective_from")
     prev_count = F.lag("count").over(window)
 
-    return (
+    result = (
         observed.withColumn("_is_change", prev_count.isNull() | (prev_count != F.col("count")))
         .filter(F.col("_is_change"))
         .select("station_id", "effective_from", "vehicle_type_id", "count")
     )
+    return assert_unique(result, ["station_id", "effective_from", "vehicle_type_id"])
