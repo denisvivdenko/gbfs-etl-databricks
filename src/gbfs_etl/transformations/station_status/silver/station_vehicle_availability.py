@@ -12,10 +12,13 @@ def transform_vehicle_availability(bronze_df: DataFrame) -> DataFrame:
     value. See silver_station_status_schema_design.md.
     """
     stations = (
-        bronze_df.selectExpr("explode(data.stations) as station")
+        bronze_df.select(
+            F.to_timestamp_ntz(F.col("last_updated"), F.lit(_TS_FORMAT)).alias("effective_from"),
+            F.explode("data.stations").alias("station"),
+        )
         .select(
             F.col("station.station_id").alias("station_id"),
-            F.to_timestamp_ntz(F.col("station.last_reported"), F.lit(_TS_FORMAT)).alias("effective_from"),
+            "effective_from",
             F.col("station.num_vehicles_available").alias("num_vehicles_available"),
         )
     )

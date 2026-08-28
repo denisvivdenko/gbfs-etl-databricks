@@ -94,7 +94,7 @@ def test_reinserts_a_row_when_count_returns_to_a_previous_value(spark, load_sche
 
     assert [r["num_vehicles_available"] for r in result] == [3, 5, 3]
     assert [r["effective_from"] for r in result] == [
-        _parse_ts("2026-08-10T10:00:00Z"),
-        _parse_ts("2026-08-10T11:00:00Z"),
-        _parse_ts("2026-08-10T12:00:00Z"),
+        _parse_ts("2026-08-10T10:00:05Z"),
+        _parse_ts("2026-08-10T11:00:05Z"),
+        _parse_ts("2026-08-10T12:00:05Z"),
     ]

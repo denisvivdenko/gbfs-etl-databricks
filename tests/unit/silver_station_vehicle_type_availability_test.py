@@ -74,9 +74,9 @@ def test_change_detection_is_independent_per_vehicle_type(spark, load_schema):
     result = transform_vehicle_type_availability(bronze_df).collect()
 
     assert _rows_as_set(result) == {
-        ("station-a", _parse_ts("2026-08-10T10:00:00Z"), "type-a", 3),
-        ("station-a", _parse_ts("2026-08-10T10:00:00Z"), "type-b", 2),
-        ("station-a", _parse_ts("2026-08-10T11:00:00Z"), "type-b", 5),
+        ("station-a", _parse_ts("2026-08-10T10:00:05Z"), "type-a", 3),
+        ("station-a", _parse_ts("2026-08-10T10:00:05Z"), "type-b", 2),
+        ("station-a", _parse_ts("2026-08-10T11:00:05Z"), "type-b", 5),
     }
 
 
@@ -103,10 +103,10 @@ def test_zero_fills_a_previously_seen_type_when_it_drops_out_of_the_array(spark,
     result = transform_vehicle_type_availability(bronze_df).collect()
 
     assert _rows_as_set(result) == {
-        ("station-b", _parse_ts("2026-08-10T10:00:00Z"), "type-a", 3),
-        ("station-b", _parse_ts("2026-08-10T10:00:00Z"), "type-b", 2),
-        ("station-b", _parse_ts("2026-08-10T11:00:00Z"), "type-a", 0),
-        ("station-b", _parse_ts("2026-08-10T11:00:00Z"), "type-b", 0),
+        ("station-b", _parse_ts("2026-08-10T10:00:05Z"), "type-a", 3),
+        ("station-b", _parse_ts("2026-08-10T10:00:05Z"), "type-b", 2),
+        ("station-b", _parse_ts("2026-08-10T11:00:05Z"), "type-a", 0),
+        ("station-b", _parse_ts("2026-08-10T11:00:05Z"), "type-b", 0),
     }
 
 
@@ -134,8 +134,8 @@ def test_never_zero_fills_a_type_the_station_has_not_reported(spark, load_schema
     result = transform_vehicle_type_availability(bronze_df).collect()
 
     assert _rows_as_set(result) == {
-        ("station-c", _parse_ts("2026-08-10T10:00:00Z"), "type-a", 3),
-        ("station-c", _parse_ts("2026-08-10T11:00:00Z"), "type-c", 1),
+        ("station-c", _parse_ts("2026-08-10T10:00:05Z"), "type-a", 3),
+        ("station-c", _parse_ts("2026-08-10T11:00:05Z"), "type-c", 1),
     }
 
 

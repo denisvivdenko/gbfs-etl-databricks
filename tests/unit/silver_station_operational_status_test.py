@@ -127,14 +127,14 @@ def test_inserts_a_new_row_each_time_flags_actually_change(spark, load_schema):
     changes = [r for r in result if r["station_id"] == "station-changes"]
     assert [r["is_renting"] for r in changes] == [True, False, True]
     assert [r["effective_from"] for r in changes] == [
-        _parse_ts("2026-08-10T10:00:00Z"),
-        _parse_ts("2026-08-10T11:00:00Z"),
-        _parse_ts("2026-08-10T12:00:00Z"),
+        _parse_ts("2026-08-10T10:00:05Z"),
+        _parse_ts("2026-08-10T11:00:05Z"),
+        _parse_ts("2026-08-10T12:00:05Z"),
     ]
 
     stable = [r for r in result if r["station_id"] == "station-stable"]
     assert len(stable) == 1
-    assert stable[0]["effective_from"] == _parse_ts("2026-08-10T10:00:00Z")
+    assert stable[0]["effective_from"] == _parse_ts("2026-08-10T10:00:05Z")
 
 
 def test_vehicle_count_changes_do_not_trigger_a_new_operational_status_row(spark, load_schema):
@@ -165,4 +165,4 @@ def test_vehicle_count_changes_do_not_trigger_a_new_operational_status_row(spark
     result = transform_operational_status(bronze_df).collect()
 
     assert len(result) == 1
-    assert result[0]["effective_from"] == _parse_ts("2026-08-10T10:00:00Z")
+    assert result[0]["effective_from"] == _parse_ts("2026-08-10T10:00:05Z")
